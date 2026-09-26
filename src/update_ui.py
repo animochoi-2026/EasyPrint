@@ -11,7 +11,7 @@ import webbrowser
 from .constants import get_base_dir, get_bundled_resource_dir, is_frozen
 from .version import APP_VERSION, RELEASES_URL
 from .updates import check_for_update, download_update
-from .update_installer import launch_installer
+from .update_installer import launch_installer, stop_installer
 from .print_log import log_event
 
 
@@ -151,8 +151,7 @@ class UpdateUI:
             try:
                 persist_update_state(self.app)
             except Exception as exc:
-                self.helper.terminate()
-                self.helper.wait(timeout=5)
+                stop_installer(self.helper, self.work)
                 self.idle()
                 messagebox.showerror("목록 저장 실패", f"업데이트를 중지했습니다.\n{exc}", parent=self.app)
                 return
@@ -165,8 +164,7 @@ class UpdateUI:
         elif self.helper.poll() is not None or time.monotonic() > self.ready_deadline:
             # Terminate only the helper we just launched, before replacing files.
             if self.helper.poll() is None:
-                self.helper.terminate()
-                self.helper.wait(timeout=5)
+                stop_installer(self.helper, self.work)
             self.idle()
             messagebox.showerror("업데이트 실패", "업데이트 도우미를 시작하지 못했습니다. 기존 프로그램은 그대로 사용할 수 있습니다.", parent=self.app)
         else:

@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 
 from .updates import MANIFEST, ROOT_FILES, verify_payload, version_tuple
 
@@ -81,10 +82,19 @@ def apply_job(job_path):
     try:
         (work / "ready").write_text("ready", encoding="ascii")
         # Do not kill the app or replace its files while it's still running.
-        if kernel.WaitForSingleObject(handle, 120000) != 0:
-            raise RuntimeError("EasyPrint가 종료되지 않아 업데이트를 취소했습니다.")
+        deadline = time.monotonic() + 120
+        while True:
+            if (work / "cancel").exists():
+                return
+            result = kernel.WaitForSingleObject(handle, 200)
+            if result == 0:
+                break
+            if result != 258 or time.monotonic() >= deadline:
+                raise RuntimeError("EasyPrint가 종료되지 않아 업데이트를 취소했습니다.")
     finally:
         kernel.CloseHandle(handle)
+    if (work / "cancel").exists():
+        return
     backup = install_payload(work / "payload", target, version)
     with (target / "update.log").open("a", encoding="utf-8") as log:
         log.write(f"Installed {version}; previous files: {backup}\n")
@@ -105,3 +115,13 @@ def launch_installer(work, target, helper, version):
     return subprocess.Popen([str(work / "EasyPrintUpdater.exe"), str(work / "job.json")],
                             cwd=work, creationflags=0x08000000)
 
+
+def stop_installer(process, work):
+    """Cancel the worker, not only the outer PyInstaller onefile process."""
+    (Path(work) / "cancel").write_text("cancel", encoding="ascii")
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                       capture_output=True, creationflags=0x08000000, timeout=10)
+        process.wait(timeout=5)
