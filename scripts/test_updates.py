@@ -209,6 +209,27 @@ class UpdateTests(unittest.TestCase):
             launch.assert_not_called()
             app.list_view.commit_pending_options.assert_called_once_with({app.items[0].id})
 
+    def test_cancelled_helper_exits_without_installing(self):
+        from src import update_installer as installer
+        work = self.root / 'cancelled-job'
+        work.mkdir()
+        (work / 'cancel').write_text('cancel')
+        (work / 'job.json').write_text(json.dumps({'target': str(work / 'target'), 'version': '1.0.1', 'pid': 1}))
+        kernel = Mock()
+        with patch.object(installer, 'verify_payload'), patch.object(installer, '_parent_handle', return_value=(kernel, 1)), \
+             patch.object(installer, 'install_payload') as install, patch.object(installer.subprocess, 'Popen') as start:
+            installer.apply_job(work / 'job.json')
+        install.assert_not_called()
+        start.assert_not_called()
+        kernel.CloseHandle.assert_called_once_with(1)
+
+    def test_stop_helper_signals_cancel_before_waiting(self):
+        from src.update_installer import stop_installer
+        process = Mock()
+        process.wait.side_effect = lambda **kwargs: self.assertTrue((self.root / 'cancel').exists())
+        stop_installer(process, self.root)
+        process.wait.assert_called_once_with(timeout=10)
+
     def test_update_resume_restores_queue_without_auto_print_or_crash_prompt(self):
         item = PrintItem('local.pdf')
         app = SimpleNamespace(_settings={'update_resume': True}, items=[])
