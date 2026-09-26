@@ -1,0 +1,37 @@
+EasyPrint third-party notices and corresponding source
+======================================================
+
+EasyPrint source: https://github.com/animochoi-2026/EasyPrint
+EasyPrint is distributed under GNU AGPL version 3; see LICENSE.txt.
+No Microsoft Word or Hancom Office binaries are distributed.
+
+PyMuPDF 1.28.2 and MuPDF 1.28.x — Artifex Software, Inc.
+GNU AGPL-3.0 (the open-source option of the upstream dual license).
+Source and build instructions: https://github.com/pymupdf/PyMuPDF/tree/1.28.2
+Source distribution: https://pypi.org/project/PyMuPDF/1.28.2/#files
+The PyMuPDF source distribution specifies the exact MuPDF source archive used.
+MuPDF source and included library notices: https://mupdf.com/releases/
+Upstream license: https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright
+
+SumatraPDF 3.6.1 — Krzysztof Kowalczyk and contributors.
+Unmodified separate executable, GNU GPL version 3; includes third-party software.
+Corresponding source (including bundled library sources and license notices):
+https://github.com/sumatrapdfreader/sumatrapdf/tree/3.6.1rel
+Download source: https://github.com/sumatrapdfreader/sumatrapdf/archive/refs/tags/3.6.1rel.zip
+Build instructions: https://github.com/sumatrapdfreader/sumatrapdf/blob/3.6.1rel/docs/md/Contribute-to-SumatraPDF.md
+Full license: https://github.com/sumatrapdfreader/sumatrapdf/blob/3.6.1rel/COPYING
+Official binary and pinned hash: scripts/fetch_sumatra.py in EasyPrint source.
+
+Other included libraries retain their original licenses:
+Python 3.13 — Python Software Foundation License; https://www.python.org/downloads/source/
+Tcl/Tk — BSD-style license; https://www.tcl.tk/software/tcltk/license.html
+tkinterdnd2 0.6.2 / tkdnd — MIT/BSD-style; https://github.com/Eliav2/tkinterdnd2
+pypdf 6.15.0 — BSD-3-Clause; https://github.com/py-pdf/pypdf
+pywin32 312 — Python/PSF-style license; https://github.com/mhammond/pywin32
+Pillow 12.3.0 — MIT-CMU; https://github.com/python-pillow/Pillow
+PyInstaller bootloader — GPL with distribution exception; https://pyinstaller.org/en/stable/license.html
+
+Corresponding dependency sources and build information are available at the URLs
+above at no charge. Runtime libraries and their available license files are in
+_internal; the source tree pins the dependencies in requirements.txt.
+These components are not endorsed by Microsoft, Hancom, GitHub, or their authors.
