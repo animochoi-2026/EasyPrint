@@ -68,7 +68,7 @@ class ScrollableFrame(ttk.Frame):
         super().destroy()
 
     def _sync_scroll_region(self) -> None:
-        height = self.inner.winfo_reqheight()
+        height = self._content_height()
         viewport = self.canvas.winfo_height()
         self.canvas.configure(scrollregion=(0, 0, self.canvas.winfo_width(), max(height, viewport)))
         if height <= viewport:
@@ -77,6 +77,9 @@ class ScrollableFrame(ttk.Frame):
             top, bottom = self.canvas.yview()
             if bottom > 1:
                 self.canvas.yview_moveto(max(0, 1 - viewport / height))
+
+    def _content_height(self) -> int:
+        return self.inner.winfo_reqheight()
 
     def _on_canvas_configure(self, event: tk.Event) -> None:
         self.canvas.itemconfig(self._inner_window, width=event.width)
@@ -89,7 +92,7 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.unbind_all("<MouseWheel>")
 
     def _on_mousewheel(self, event: tk.Event) -> None:
-        if self.inner.winfo_reqheight() > self.canvas.winfo_height():
+        if self._content_height() > self.canvas.winfo_height():
             self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def scroll_to_y_fraction(self, y_root: int) -> None:
@@ -330,6 +333,7 @@ class PrintListView(ScrollableFrame):
         self._items_by_id: dict[str, PrintItem] = {}
         self._selected_id: str | None = None
         self._locked_ids = set()
+        self._scroll_to_bottom_pending = False
 
         self._on_copies_change = on_copies_change
         self._on_range_change = on_range_change
@@ -386,6 +390,8 @@ class PrintListView(ScrollableFrame):
         # Keep existing widgets and edits; destroying the whole grid on every
         # drop causes geometry/scroll churn and loses in-progress input.
         ids = {item.id for item in items}
+        added = bool(ids.difference(self._rows))
+        self._scroll_to_bottom_pending = bool(items) and (self._scroll_to_bottom_pending or added)
         for item_id in list(self._rows):
             if item_id not in ids:
                 self._rows.pop(item_id).destroy()
@@ -410,7 +416,26 @@ class PrintListView(ScrollableFrame):
         self._drag_active = False
         if self._scroll_sync_id is not None:
             self.after_cancel(self._scroll_sync_id)
-        self._scroll_sync_id = self.after_idle(self._sync_scroll_region)
+        self._scroll_sync_id = self.after_idle(self._settle_items_layout)
+
+    def _content_height(self) -> int:
+        # Canvas-only padding: exactly one row below the final file, never a
+        # fake item or an accumulating grid row. It also scales with the font.
+        height = super()._content_height()
+        if self._order:
+            height += self._rows[self._order[-1]].winfo_reqheight()
+        return height
+
+    def _settle_items_layout(self) -> None:
+        # Tk can queue parent geometry propagation behind our first idle job.
+        self._scroll_sync_id = self.after_idle(self._finish_items_layout)
+
+    def _finish_items_layout(self) -> None:
+        self._scroll_sync_id = None
+        self._sync_scroll_region()
+        if self._scroll_to_bottom_pending:
+            self.canvas.yview_moveto(1.0)
+            self._scroll_to_bottom_pending = False
 
     def request_reprint(self, from_here=False) -> None:
         if self._selected_id and self._on_reprint_request:
