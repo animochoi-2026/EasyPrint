@@ -75,6 +75,74 @@ class WorkspaceTests(unittest.TestCase):
         self.app._on_worker_finished()
         self.assertEqual(str(self.app.control_panel.printer_combo['state']), 'readonly')
 
+    def test_new_files_scroll_to_bottom_with_exactly_one_blank_row(self):
+        self.app.deiconify()
+        view = self.app.list_view
+        for batch in range(5):
+            # Add while looking at the top, as well as during an uncommitted edit.
+            view.canvas.yview_moveto(0)
+            self.app.items.extend(PrintItem(f'{batch}-{n}.pdf', page_count=3) for n in range(8))
+            self.app._rerender()
+            self.app.update()
+            last = view._rows[self.app.items[-1].id]
+            region = tuple(map(float, view.canvas.cget('scrollregion').split()))
+            self.assertAlmostEqual(view.canvas.yview()[1], 1.0)
+            self.assertEqual(region[3] - (last.winfo_y() + last.winfo_height()), last.winfo_height())
+            self.assertEqual(len(view._rows), len(self.app.items))
+            self.assertEqual(len(view.inner.grid_slaves()), len(self.app.items))
+            self.assertLessEqual(last.winfo_rooty() + last.winfo_height(),
+                                 view.canvas.winfo_rooty() + view.canvas.winfo_height())
+
+    def test_status_refresh_and_reorder_do_not_force_scroll(self):
+        self.app.deiconify()
+        self.app.items = [PrintItem(f'{n}.pdf', page_count=3) for n in range(30)]
+        self.app._rerender()
+        self.app.update()
+        view = self.app.list_view
+        view.canvas.yview_moveto(.25)
+        position = view.canvas.yview()
+        self.app.items[-1].status = PrintStatus.DONE
+        view.refresh_item(self.app.items[-1].id)
+        self.app._rerender()
+        self.app.update()
+        self.assertEqual(view.canvas.yview(), position)
+        self.app.items.reverse()
+        self.app._rerender()
+        self.app.update()
+        self.assertEqual(view.canvas.yview(), position)
+
+    def test_pending_scroll_survives_refresh_but_clear_cancels_it(self):
+        self.app.deiconify()
+        self.app.items = [PrintItem(f'{n}.pdf', page_count=3) for n in range(30)]
+        self.app._rerender()
+        self.app._rerender()  # Same files before Tk's deferred layout completes.
+        self.app.update()
+        view = self.app.list_view
+        self.assertAlmostEqual(view.canvas.yview()[1], 1.0)
+        self.app.items.append(PrintItem('extra.pdf', page_count=3))
+        self.app._rerender()
+        self.app.items.clear()
+        self.app._rerender()
+        self.app.update()
+        self.assertFalse(view._scroll_to_bottom_pending)
+        self.assertIsNone(view._scroll_sync_id)
+        self.assertEqual(view.canvas.yview(), (0.0, 1.0))
+        self.assertEqual(view._content_height(), view.inner.winfo_reqheight())
+
+    def test_wheel_can_scroll_the_one_row_bottom_padding(self):
+        from types import SimpleNamespace
+        self.app.deiconify()
+        view = self.app.list_view
+        self.app.items = [PrintItem('one.pdf', page_count=3)]
+        self.app._rerender()
+        self.app.update()
+        height = view._rows[self.app.items[0].id].winfo_reqheight()
+        # Enough room for the file itself, but not file + one blank row.
+        with patch.object(view.canvas, 'winfo_height', return_value=height + height // 2), \
+             patch.object(view.canvas, 'yview_scroll') as scroll:
+            view._on_mousewheel(SimpleNamespace(delta=-120))
+        scroll.assert_called_once_with(1, 'units')
+
     def test_single_reprint_does_not_include_other_pending(self):
         self.app.items = [PrintItem('pending.pdf'), PrintItem('done.pdf', status=PrintStatus.DONE)]
         self.app._rerender()
