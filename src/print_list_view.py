@@ -17,13 +17,18 @@ from .models import IMAGE_EXTENSIONS, PENDING_STATUSES, PrintItem, PrintStatus
 from .pdf_utils import get_pdf_page_count
 from .theme import (
     BG_MAIN,
+    BG_ROW_HOVER,
+    BG_DONE_FIELD,
     BORDER,
+    BORDER_DONE,
     BORDER_STRONG,
     FONT_BASE,
     FONT_ICON,
     FONT_SMALL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    TEXT_DONE,
+    TEXT_DONE_SECONDARY,
     row_style_names,
 )
 from .tooltip import Tooltip
@@ -292,6 +297,8 @@ class PrintRow(ttk.Frame):
     def _row_kind(self) -> str:
         if self.item.status == PrintStatus.PRINTING:
             return "printing"
+        if self.item.status == PrintStatus.DONE:
+            return "done_selected" if self.selected else "done_hover" if self.hovering else "done"
         if self.selected:
             return "selected"
         if self.hovering:
@@ -301,12 +308,23 @@ class PrintRow(ttk.Frame):
     def _apply_bg(self) -> None:
         frame_style, label_style, secondary_style, close_style = row_style_names(self._row_kind())
         self.configure(style=frame_style)
-        self.divider.configure(background=BORDER)
+        done = self.item.status == PrintStatus.DONE
+        self.divider.configure(background=BORDER_DONE if done else BORDER)
         for w in (self.icon_label, self.name_label):
             w.configure(style=label_style)
         for w in (self.copies_caption, self.range_caption, self.detail_label):
             w.configure(style=secondary_style)
         self.close_btn.configure(style=close_style)
+        self.copies_spin.configure(style="Done.TSpinbox" if done else "TSpinbox")
+        # Recolor the editable controls too, without changing pending values,
+        # disabled state, selection, or the red range-validation outline.
+        self.range_entry.configure(
+            background=BG_DONE_FIELD if done else BG_MAIN,
+            foreground=TEXT_DONE if done else TEXT_PRIMARY,
+            insertbackground=TEXT_DONE if done else TEXT_PRIMARY,
+            disabledbackground=BG_DONE_FIELD if done else BG_ROW_HOVER,
+            disabledforeground=TEXT_DONE_SECONDARY if done else TEXT_SECONDARY,
+        )
 
 
 class PrintListView(ScrollableFrame):

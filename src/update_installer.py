@@ -14,7 +14,7 @@ import time
 from .updates import MANIFEST, ROOT_FILES, verify_payload, version_tuple
 
 
-def install_payload(payload, target, version):
+def install_payload(payload, target, version, *, rollback=False, expected_current=None):
     payload, target = Path(payload).resolve(), Path(target).resolve()
     verify_payload(payload, version)
     if not (target / "EasyPrint.exe").is_file() or not (target / "_internal").is_dir():
@@ -24,8 +24,17 @@ def install_payload(payload, target, version):
     old_manifest = target / MANIFEST
     if old_manifest.exists():
         old = json.loads(old_manifest.read_text(encoding="utf-8"))
-        if old.get("product") != "EasyPrint" or version_tuple(version) <= version_tuple(old.get("version")):
+        if expected_current is not None and old.get("version") != expected_current:
+            raise ValueError("설치 버전이 변경되었습니다. 다시 확인해주세요.")
+        if old.get("product") != "EasyPrint":
+            raise ValueError("기존 프로그램 정보를 확인할 수 없습니다.")
+        if rollback:
+            if expected_current is None or version_tuple(version) >= version_tuple(old.get("version")):
+                raise ValueError("명시적으로 확인한 이전 버전으로만 롤백할 수 있습니다.")
+        elif version_tuple(version) <= version_tuple(old.get("version")):
             raise ValueError("같거나 이전 버전으로 덮어쓰지 않습니다.")
+    elif rollback or expected_current is not None:
+        raise ValueError("현재 버전 정보가 없어 버전을 변경할 수 없습니다.")
     names = sorted({"_internal"} | {p.name for p in payload.iterdir() if p.is_file()})
     for name in names:
         if name != "_internal" and name not in ROOT_FILES:
@@ -55,6 +64,12 @@ def install_payload(payload, target, version):
             os.replace(backup / name, target / name)
         raise
     # Keep the previous binaries for recovery. No settings/log/queue moved.
+    try:
+        (transaction / 'completed.json').write_text(json.dumps({
+            'product': 'EasyPrint', 'target': str(target), 'version': version,
+        }), encoding='utf-8')
+    except OSError:
+        pass  # Bookkeeping failure must not turn a successful install into failure.
     return backup
 
 
@@ -95,13 +110,31 @@ def apply_job(job_path):
         kernel.CloseHandle(handle)
     if (work / "cancel").exists():
         return
-    backup = install_payload(work / "payload", target, version)
+    backup = install_payload(work / "payload", target, version,
+        rollback=job.get('rollback') is True, expected_current=job.get('expected_current'))
     with (target / "update.log").open("a", encoding="utf-8") as log:
         log.write(f"Installed {version}; previous files: {backup}\n")
+    # Cleanup is best effort only after successful replacement; failed jobs keep
+    # every recovery file. Never let a cleanup error prevent restarting the app.
+    try:
+        from .update_cleanup import prune_backups
+        keep = job.get('retained_versions')
+        if keep:
+            removed = prune_backups(target, keep, version)
+            with (target / 'update.log').open('a', encoding='utf-8') as log:
+                log.write(f'Removed obsolete backup versions: {removed}\n')
+        shutil.rmtree(work / 'payload')  # This job's already verified private payload.
+        (work / 'release.zip').unlink(missing_ok=True)
+        (work / 'finished.json').write_text(json.dumps({
+            'product': 'EasyPrint', 'target': str(target),
+        }), encoding='utf-8')
+    except Exception as exc:
+        with (target / 'update.log').open('a', encoding='utf-8') as log:
+            log.write(f'Cleanup deferred: {exc}\n')
     subprocess.Popen([str(target / "EasyPrint.exe")], cwd=target, creationflags=0x08000000)
 
 
-def launch_installer(work, target, helper, version):
+def launch_installer(work, target, helper, version, *, rollback=False, expected_current=None, retained_versions=None):
     """Use the currently installed trusted helper, not a downloaded program."""
     work = Path(work)
     if not Path(helper).is_file():
@@ -111,6 +144,8 @@ def launch_installer(work, target, helper, version):
     shutil.copyfile(helper, work / "EasyPrintUpdater.exe")
     (work / "job.json").write_text(json.dumps({
         "target": str(Path(target).resolve()), "version": version, "pid": os.getpid(),
+        "rollback": rollback, "expected_current": expected_current,
+        "retained_versions": sorted(retained_versions) if retained_versions else None,
     }), encoding="utf-8")
     return subprocess.Popen([str(work / "EasyPrintUpdater.exe"), str(work / "job.json")],
                             cwd=work, creationflags=0x08000000)

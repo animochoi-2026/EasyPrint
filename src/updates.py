@@ -72,8 +72,9 @@ def parse_release(data, current=APP_VERSION):
     if data.get("draft") or data.get("prerelease"):
         return None
     tag = data.get("tag_name", "")
-    if version_tuple(tag) <= version_tuple(current):
+    if current is not None and version_tuple(tag) <= version_tuple(current):
         return None
+    version_tuple(tag)
     version = tag.removeprefix("v")
     name = f"EasyPrint-{version}-windows-x64.zip"
     assets = [a for a in data.get("assets", []) if a.get("name") == name and a.get("state") == "uploaded"]
@@ -107,6 +108,49 @@ def check_for_update(current=APP_VERSION):
         if exc.code in (403, 429):
             raise ValueError("GitHub 접속 한도에 도달했습니다. 잠시 후 다시 확인해주세요.") from exc
         raise
+
+
+@dataclass(frozen=True)
+class VersionChoices:
+    latest: Release | None
+    current: str
+    previous: Release | None
+
+    @property
+    def retained_versions(self):
+        return {self.current} | {r.version for r in (self.latest, self.previous) if r}
+
+
+def version_choices(releases, current=APP_VERSION):
+    ordered = sorted(releases, key=lambda r: version_tuple(r.version), reverse=True)
+    previous = next((r for r in ordered if version_tuple(r.version) < version_tuple(current)), None)
+    return VersionChoices(ordered[0] if ordered else None, current, previous)
+
+
+def list_releases():
+    """Read the entire stable catalog before choosing a predecessor or pruning."""
+    releases = {}
+    for page in range(1, 21):
+        with _open(f"https://api.github.com/repos/{UPDATE_REPOSITORY}/releases?per_page=100&page={page}") as response:
+            content = response.read(4 * 1024 * 1024 + 1)
+        if len(content) > 4 * 1024 * 1024:
+            raise ValueError("버전 목록이 너무 큽니다. 자동 정리를 하지 않습니다.")
+        data = json.loads(content)
+        if not isinstance(data, list):
+            raise ValueError("버전 목록 형식이 올바르지 않습니다.")
+        for item in data:
+            if item.get("draft") or item.get("prerelease"):
+                continue
+            try:
+                version_tuple(item.get("tag_name"))
+            except ValueError:
+                continue
+            # Invalid stable assets are an error, not permission to prune backups.
+            release = parse_release(item, None)
+            releases[version_tuple(release.version)] = release
+        if len(data) < 100:
+            return sorted(releases.values(), key=lambda r: version_tuple(r.version), reverse=True)
+    raise ValueError("전체 버전 목록을 확인하지 못해 자동 정리를 하지 않습니다.")
 
 
 def file_hash(path):
@@ -218,3 +262,12 @@ def download_update(release, on_progress=None, cancel=None):
         shutil.rmtree(work, ignore_errors=True)  # Only this call's private temp dir.
         raise
 
+
+def discard_download(work):
+    """Only called with a private work directory returned by download_update."""
+    work = Path(work)
+    temp = Path(tempfile.gettempdir()).resolve()
+    if (work.is_symlink() or work.is_junction() or work.resolve().parent != temp
+            or not work.name.startswith('easyprint_update_')):
+        return
+    shutil.rmtree(work, ignore_errors=True)

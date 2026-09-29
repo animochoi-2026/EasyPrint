@@ -13,6 +13,13 @@ BG_SIDEBAR = "#ffffff"
 BG_ROW_HOVER = "#f5f5f7"
 BG_ROW_SELECTED = "#e8f0fe"
 BG_ROW_PRINTING = "#eaf3ff"
+BG_ROW_DONE = "#1d1d1f"
+BG_ROW_DONE_HOVER = "#323236"
+BG_ROW_DONE_SELECTED = "#234b79"
+BG_DONE_FIELD = "#303034"
+TEXT_DONE = "#ffffff"
+TEXT_DONE_SECONDARY = "#d2d2d7"
+BORDER_DONE = "#73737b"
 
 BORDER = "#e5e5ea"
 BORDER_STRONG = "#d2d2d7"
@@ -150,8 +157,9 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
 
 
 def row_style_names(kind: str) -> tuple[str, str, str, str]:
-    """kind: 'plain' | 'hover' | 'selected' | 'printing' -> (frame, label, secondary_label, close_button 스타일명)."""
-    prefix = {"plain": "RowPlain", "hover": "RowHover", "selected": "RowSelected", "printing": "RowPrinting"}[kind]
+    """상태별 (frame, label, secondary_label, close_button 스타일명)."""
+    prefix = {"plain": "RowPlain", "hover": "RowHover", "selected": "RowSelected", "printing": "RowPrinting",
+              "done": "RowDone", "done_hover": "RowDoneHover", "done_selected": "RowDoneSelected"}[kind]
     return f"{prefix}.TFrame", f"{prefix}.TLabel", f"{prefix}Secondary.TLabel", f"{prefix}Close.TLabel"
 
 
@@ -161,11 +169,26 @@ def configure_row_styles(style: ttk.Style) -> None:
         "hover": BG_ROW_HOVER,
         "selected": BG_ROW_SELECTED,
         "printing": BG_ROW_PRINTING,
+        "done": BG_ROW_DONE,
+        "done_hover": BG_ROW_DONE_HOVER,
+        "done_selected": BG_ROW_DONE_SELECTED,
     }
     for kind, bg in variants.items():
         frame_style, label_style, secondary_style, close_style = row_style_names(kind)
+        done = kind.startswith("done")
+        primary = TEXT_DONE if done else TEXT_PRIMARY
+        secondary = TEXT_DONE_SECONDARY if done else TEXT_SECONDARY
         style.configure(frame_style, background=bg)
-        style.configure(label_style, background=bg, foreground=TEXT_PRIMARY, font=FONT_BASE)
-        style.configure(secondary_style, background=bg, foreground=TEXT_SECONDARY, font=FONT_SMALL)
-        style.configure(close_style, background=bg, foreground=TEXT_SECONDARY, font=(FONT_FAMILY, 11))
-        style.map(close_style, foreground=[("active", DANGER)])
+        style.configure(label_style, background=bg, foreground=primary, font=FONT_BASE)
+        style.configure(secondary_style, background=bg, foreground=secondary, font=FONT_SMALL)
+        style.configure(close_style, background=bg, foreground=secondary, font=(FONT_FAMILY, 11))
+        style.map(close_style, foreground=[("active", "#ff8a80" if done else DANGER)])
+
+    style.configure("Done.TSpinbox", fieldbackground=BG_DONE_FIELD, background=BG_DONE_FIELD,
+                    foreground=TEXT_DONE, arrowcolor=TEXT_DONE, insertcolor=TEXT_DONE,
+                    bordercolor=BORDER_DONE, lightcolor=BG_DONE_FIELD, darkcolor=BG_DONE_FIELD)
+    style.map("Done.TSpinbox", fieldbackground=[("disabled", BG_DONE_FIELD), ("readonly", BG_DONE_FIELD)],
+              background=[("active", BG_ROW_DONE_HOVER), ("disabled", BG_DONE_FIELD)],
+              foreground=[("disabled", TEXT_DONE_SECONDARY)],
+              arrowcolor=[("disabled", TEXT_DONE_SECONDARY)],
+              bordercolor=[("focus", "#80bfff")])
