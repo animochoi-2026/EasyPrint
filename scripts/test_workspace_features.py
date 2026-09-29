@@ -61,6 +61,91 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(view.canvas.yview(), (0.0, 1.0))
         self.assertEqual(first.winfo_y(), 0)
 
+    def test_completed_row_inverts_labels_and_inputs(self):
+        from tkinter import ttk
+        from src import theme
+        item = PrintItem('completed.pdf', status=PrintStatus.DONE, page_count=12)
+        self.app.items = [item]
+        self.app._rerender()
+        row = self.app.list_view._rows[item.id]
+        style = ttk.Style(self.app)
+        self.assertEqual(row._row_kind(), 'done')
+        self.assertEqual(style.lookup(row['style'], 'background'), theme.BG_ROW_DONE)
+        for label in (row.icon_label, row.name_label):
+            self.assertEqual(style.lookup(label['style'], 'foreground'), theme.TEXT_DONE)
+        for label in (row.detail_label, row.copies_caption, row.range_caption, row.close_btn):
+            self.assertEqual(style.lookup(label['style'], 'foreground'), theme.TEXT_DONE_SECONDARY)
+        self.assertEqual(row.range_entry['foreground'], theme.TEXT_DONE)
+        self.assertEqual(row.range_entry['background'], theme.BG_DONE_FIELD)
+        self.assertEqual(style.lookup(row.copies_spin['style'], 'foreground'), theme.TEXT_DONE)
+        self.assertEqual(row.icon_var.get(), item.icon)
+
+    def test_completed_selection_and_hover_remain_inverted(self):
+        from tkinter import ttk
+        from src import theme
+        item = PrintItem('completed.pdf', status=PrintStatus.DONE)
+        self.app.items = [item]
+        self.app._rerender()
+        row = self.app.list_view._rows[item.id]
+        style = ttk.Style(self.app)
+        row._on_hover_enter()
+        self.assertEqual(row._row_kind(), 'done_hover')
+        self.assertEqual(style.lookup(row['style'], 'background'), theme.BG_ROW_DONE_HOVER)
+        row.set_selected(True)
+        row._on_hover_leave()
+        self.assertEqual(row._row_kind(), 'done_selected')
+        self.assertEqual(style.lookup(row['style'], 'background'), theme.BG_ROW_DONE_SELECTED)
+        self.assertEqual(style.lookup(row.name_label['style'], 'foreground'), theme.TEXT_DONE)
+
+    def test_reprint_restores_light_style_without_losing_edits_or_errors(self):
+        from src import theme
+        item = PrintItem('completed.pdf', status=PrintStatus.DONE, page_count=12)
+        self.app.items = [item]
+        self.app._rerender()
+        row = self.app.list_view._rows[item.id]
+        row.range_var.set('invalid')
+        row.copies_var.set('3')
+        row._set_range_invalid(True, '범위 오류')
+        row.set_selected(True)
+        row._on_hover_enter()
+        self.assertEqual(row.range_entry['highlightbackground'], '#ff3b30')
+        item.status = PrintStatus.WAITING
+        self.app.list_view.refresh_item(item.id)
+        self.assertEqual(row._row_kind(), 'selected')
+        self.assertEqual(row.range_entry['background'], theme.BG_MAIN)
+        self.assertEqual(row.range_entry['foreground'], theme.TEXT_PRIMARY)
+        self.assertEqual(row.copies_spin['style'], 'TSpinbox')
+        self.assertEqual(row.range_var.get(), 'invalid')
+        self.assertEqual(row.copies_var.get(), '3')
+        self.assertEqual(row.range_entry['highlightbackground'], '#ff3b30')
+
+    def test_printing_failed_and_paused_do_not_look_completed(self):
+        item = PrintItem('states.pdf', status=PrintStatus.DONE)
+        self.app.items = [item]
+        self.app._rerender()
+        row = self.app.list_view._rows[item.id]
+        for status in (PrintStatus.PRINTING, PrintStatus.FAILED, PrintStatus.PAUSED):
+            item.status = status
+            row.refresh()
+            self.assertEqual(row._row_kind(), 'printing' if status == PrintStatus.PRINTING else 'plain')
+            self.assertEqual(row.icon_var.get(), item.icon)
+            self.assertEqual(row.copies_spin['style'], 'TSpinbox')
+
+    def test_completed_disabled_controls_remain_readable(self):
+        from tkinter import ttk
+        from src import theme
+        self.app.items = [PrintItem('done.hwp', status=PrintStatus.DONE)]
+        self.app._rerender()
+        row = self.app.list_view._rows[self.app.items[0].id]
+        row.options_locked = True
+        row.refresh()
+        self.assertEqual(row.range_entry['state'], 'disabled')
+        self.assertEqual(row.range_entry['disabledbackground'], theme.BG_DONE_FIELD)
+        self.assertEqual(row.range_entry['disabledforeground'], theme.TEXT_DONE_SECONDARY)
+        self.assertTrue(row.copies_spin.instate(['disabled']))
+        self.assertEqual(ttk.Style(self.app).lookup(row.copies_spin['style'], 'foreground', ('disabled',)),
+                         theme.TEXT_DONE_SECONDARY)
+
     def test_reprint_from_selection_keeps_earlier_items_and_printer(self):
         self.app.items = [PrintItem(f'{n}.pdf', status=PrintStatus.DONE, page_count=5) for n in range(4)]
         self.app._rerender()
