@@ -13,13 +13,13 @@ BG_SIDEBAR = "#ffffff"
 BG_ROW_HOVER = "#f5f5f7"
 BG_ROW_SELECTED = "#e8f0fe"
 BG_ROW_PRINTING = "#eaf3ff"
-BG_ROW_DONE = "#1d1d1f"
-BG_ROW_DONE_HOVER = "#323236"
-BG_ROW_DONE_SELECTED = "#234b79"
-BG_DONE_FIELD = "#303034"
-TEXT_DONE = "#ffffff"
-TEXT_DONE_SECONDARY = "#d2d2d7"
-BORDER_DONE = "#73737b"
+BG_ROW_DONE = "#ededf0"
+BG_ROW_DONE_HOVER = "#e3e3e8"
+BG_ROW_DONE_SELECTED = "#dce5ee"
+BG_DONE_FIELD = "#f5f5f7"
+TEXT_DONE = "#515158"
+TEXT_DONE_SECONDARY = "#62626b"
+BORDER_DONE = "#c6c6cd"
 
 BORDER = "#e5e5ea"
 BORDER_STRONG = "#d2d2d7"
@@ -182,7 +182,7 @@ def configure_row_styles(style: ttk.Style) -> None:
         style.configure(label_style, background=bg, foreground=primary, font=FONT_BASE)
         style.configure(secondary_style, background=bg, foreground=secondary, font=FONT_SMALL)
         style.configure(close_style, background=bg, foreground=secondary, font=(FONT_FAMILY, 11))
-        style.map(close_style, foreground=[("active", "#ff8a80" if done else DANGER)])
+        style.map(close_style, foreground=[("active", DANGER)])
 
     style.configure("Done.TSpinbox", fieldbackground=BG_DONE_FIELD, background=BG_DONE_FIELD,
                     foreground=TEXT_DONE, arrowcolor=TEXT_DONE, insertcolor=TEXT_DONE,
@@ -191,4 +191,4 @@ def configure_row_styles(style: ttk.Style) -> None:
               background=[("active", BG_ROW_DONE_HOVER), ("disabled", BG_DONE_FIELD)],
               foreground=[("disabled", TEXT_DONE_SECONDARY)],
               arrowcolor=[("disabled", TEXT_DONE_SECONDARY)],
-              bordercolor=[("focus", "#80bfff")])
+              bordercolor=[("focus", ACCENT)])
