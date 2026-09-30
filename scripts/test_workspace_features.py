@@ -61,7 +61,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(view.canvas.yview(), (0.0, 1.0))
         self.assertEqual(first.winfo_y(), 0)
 
-    def test_completed_row_inverts_labels_and_inputs(self):
+    def test_completed_row_uses_gray_labels_and_inputs(self):
         from tkinter import ttk
         from src import theme
         item = PrintItem('completed.pdf', status=PrintStatus.DONE, page_count=12)
@@ -80,7 +80,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(style.lookup(row.copies_spin['style'], 'foreground'), theme.TEXT_DONE)
         self.assertEqual(row.icon_var.get(), item.icon)
 
-    def test_completed_selection_and_hover_remain_inverted(self):
+    def test_completed_selection_and_hover_remain_gray(self):
         from tkinter import ttk
         from src import theme
         item = PrintItem('completed.pdf', status=PrintStatus.DONE)
@@ -96,6 +96,24 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(row._row_kind(), 'done_selected')
         self.assertEqual(style.lookup(row['style'], 'background'), theme.BG_ROW_DONE_SELECTED)
         self.assertEqual(style.lookup(row.name_label['style'], 'foreground'), theme.TEXT_DONE)
+
+    def test_completed_palette_is_light_with_readable_dark_text(self):
+        from src import theme
+        def rgb(color):
+            return [int(color[n:n + 2], 16) for n in (1, 3, 5)]
+        def luminance(color):
+            channels = [v / 255 for v in rgb(color)]
+            linear = [v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4 for v in channels]
+            return sum(v * w for v, w in zip(linear, (.2126, .7152, .0722)))
+        backgrounds = [theme.BG_ROW_DONE, theme.BG_ROW_DONE_HOVER,
+                       theme.BG_ROW_DONE_SELECTED, theme.BG_DONE_FIELD]
+        for bg in backgrounds:
+            self.assertGreaterEqual(min(rgb(bg)), 210)
+            for text in (theme.TEXT_DONE, theme.TEXT_DONE_SECONDARY):
+                self.assertLessEqual(max(rgb(text)), 110)
+                self.assertGreaterEqual((luminance(bg) + .05) / (luminance(text) + .05), 4.5)
+        self.assertNotEqual(theme.BG_ROW_DONE, theme.BG_MAIN)
+        self.assertNotEqual(theme.BG_ROW_DONE_SELECTED, theme.BG_ROW_DONE)
 
     def test_reprint_restores_light_style_without_losing_edits_or_errors(self):
         from src import theme
