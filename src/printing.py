@@ -52,6 +52,8 @@ def print_pdf(
     page_range: str = "",
     abort_event=None,
     on_stage=None,
+    *,
+    create_fast_pdf: bool = False,
 ) -> tuple[bool, str | None, bool]:
     """SumatraPDF 포터블로 PDF 한 건을 인쇄. (성공 여부, 실패 사유, 프린터 장애 여부) 반환.
 
@@ -74,10 +76,13 @@ def print_pdf(
     if settings_parts:
         args += ["-print-settings", ",".join(settings_parts)]
 
-    with prepare_print_path(path, on_stage=on_stage) as print_path:
+    started = time.monotonic()
+    with prepare_print_path(path, on_stage=on_stage, create_fast_pdf=create_fast_pdf) as print_path:
         args.append(print_path)
-        log_event(f"PDF 인쇄 전달: {path} | 범위={page_range.strip() or '전체'} | 매수={copies} | 실제 파일={print_path}")
+        prepared = time.monotonic()
+        log_event(f"PDF 인쇄 전달: {path} | 범위={page_range.strip() or '전체'} | 매수={copies} | 실제 파일={print_path} | 준비 {prepared - started:.2f}초")
         ok, reason, is_fault = run_print_process(args, PRINT_TIMEOUT_SEC, printer, abort_event=abort_event)
+        log_event(f"PDF 인쇄 프로그램 종료: {os.path.basename(path)} | 전송 대기 {time.monotonic() - prepared:.2f}초")
 
     if not ok and not is_fault and reason and reason.startswith("종료 코드"):
         reason = f"SumatraPDF {reason}"

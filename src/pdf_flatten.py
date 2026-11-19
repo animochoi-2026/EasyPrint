@@ -57,13 +57,12 @@ def should_flatten_for_print(path: str) -> bool:
         if doc.page_count == 0:
             return False
         total_images = 0
-        max_on_page = 0
         for page in doc:
             count = len(page.get_images(full=False))
             total_images += count
-            max_on_page = max(max_on_page, count)
-        avg = total_images / doc.page_count
-        return avg >= AVG_IMAGES_PER_PAGE_THRESHOLD or max_on_page >= MAX_IMAGES_ON_ANY_PAGE_THRESHOLD
+            if count >= MAX_IMAGES_ON_ANY_PAGE_THRESHOLD or total_images >= AVG_IMAGES_PER_PAGE_THRESHOLD * doc.page_count:
+                return True
+        return False
     except Exception:
         return False
     finally:
@@ -120,13 +119,10 @@ def _read_cache_marker(cache_path: str) -> tuple[int, int] | None:
     if pymupdf is None:
         return None
     try:
-        doc = pymupdf.open(cache_path)
+        with pymupdf.open(cache_path) as doc:
+            keywords = (doc.metadata or {}).get("keywords") or ""
     except Exception:
         return None
-    try:
-        keywords = (doc.metadata or {}).get("keywords") or ""
-    finally:
-        doc.close()
     if not keywords.startswith(f"{CACHE_MARKER_PREFIX}|"):
         return None
     try:
@@ -155,13 +151,14 @@ def _persist_cache(local_flattened_path: str, cache_path: str) -> None:
 
 
 @contextmanager
-def prepare_print_path(original_path: str, on_stage: Callable[[str | None], None] | None = None):
+def prepare_print_path(original_path: str, on_stage: Callable[[str | None], None] | None = None,
+                       *, create_fast_pdf: bool = False):
     """캐시 재사용/평탄화까지 포함해 실제로 SumatraPDF에 넘길 로컬 경로를 만든다.
 
     1) 원본 옆에 유효한 "_빠른인쇄용" 캐시가 있으면(원본 수정시각+크기 일치) 그걸
        로컬로 복사해서 그대로 쓴다 — 평탄화를 다시 하지 않는다.
-    2) 없거나 원본이 바뀌었으면 원본을 로컬로 복사해서 이미지가 많은지 검사하고,
-       필요하면 평탄화한 뒤 그 결과를 캐시로 저장해둔다.
+    2) 유효한 캐시가 없으면 기본적으로 원본을 로컬로 복사해 사용한다.
+       생성 옵션을 켰을 때만 이미지가 많은지 검사하고 필요하면 변환·저장한다.
     3) 평탄화 대상이 아니면 그냥 원본(의 로컬 복사본)을 쓴다.
 
     on_stage: 평탄화처럼 시간이 걸리는 구간에 들어가고 나올 때 상태 문구를 알려주는
@@ -174,6 +171,11 @@ def prepare_print_path(original_path: str, on_stage: Callable[[str | None], None
                 on_stage(text)
             except Exception:
                 pass
+
+    if os.path.splitext(original_path)[0].endswith(CACHE_TAG):
+        with local_copy_for_print(original_path) as local_cache:
+            yield local_cache
+        return
 
     cache_path = _cache_path_for(original_path)
 
@@ -190,7 +192,7 @@ def prepare_print_path(original_path: str, on_stage: Callable[[str | None], None
                 return
 
     with local_copy_for_print(original_path) as local_original:
-        if not should_flatten_for_print(local_original):
+        if not create_fast_pdf or not should_flatten_for_print(local_original):
             yield local_original
             return
 

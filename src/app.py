@@ -21,8 +21,7 @@ Phase 10: 대기 항목이 자연스럽게 0이 되는 순간(정지/장애로 �
 실패/정지/취소/장애 이벤트를 발생 시점마다 한 줄씩 append한다.
 Phase 11: 진행 중일 때 리스트가 바뀔 때마다 queue_state.json에 스냅샷을 남기고
 정상 종료 시 지운다. 다음 실행 시 파일이 남아있으면 비정상 종료로 보고 복구 여부를
-물어본다. settings.json에는 창 크기만 저장(프린터는 이제 Windows 기본 프린터 자체를
-바꾸는 방식이라 따로 저장할 필요가 없음).
+물어본다. settings.json에는 창 크기와 빠른인쇄용 PDF 생성 여부를 저장한다.
 """
 from __future__ import annotations
 
@@ -77,6 +76,7 @@ class App(TkinterDnD.Tk):
         self._abort_event = threading.Event()
         self._run_ids = None
         self._run_printer = None
+        self._run_create_fast_pdf = False
         self._metadata_jobs = queue.Queue()
         self._metadata_results = queue.Queue()
         self._closing = False
@@ -181,6 +181,8 @@ class App(TkinterDnD.Tk):
         container.columnconfigure(2, weight=0, minsize=300)
 
     def _wire_control_panel(self) -> None:
+        self.control_panel.create_fast_pdf_var.set(self._settings.get("create_fast_pdf") is True)
+        self.control_panel.create_fast_pdf_check.configure(command=self._save_fast_pdf_option)
         self.control_panel.clear_all_btn.configure(command=self._on_clear_all_clicked)
         self.control_panel.start_btn.configure(command=self._on_start_clicked)
         self.control_panel.printer_options_btn.configure(command=self._on_printer_options_clicked)
@@ -193,6 +195,10 @@ class App(TkinterDnD.Tk):
         self.control_panel.schedule_set_btn.configure(command=self._on_schedule_entry_submit)
         self.control_panel.shell_install_btn.configure(command=lambda: self._set_shell_menu(True))
         self.control_panel.shell_remove_btn.configure(command=lambda: self._set_shell_menu(False))
+
+    def _save_fast_pdf_option(self) -> None:
+        self._settings["create_fast_pdf"] = self.control_panel.create_fast_pdf_var.get()
+        save_settings(self._settings)
 
     def _set_shell_menu(self, enabled):
         from .shell_integration import register_menu, unregister_menu
@@ -256,6 +262,7 @@ class App(TkinterDnD.Tk):
             return
         self._run_ids = run_ids
         self._run_printer = self._current_printer()
+        self._run_create_fast_pdf = self.control_panel.create_fast_pdf_var.get()
         self._cancel_schedule_timer()
         self.control_panel.set_schedule_active(False)
         self._stop_requested = False
@@ -416,6 +423,7 @@ class App(TkinterDnD.Tk):
                     item.file_path, printer, item.copies, item.page_range,
                     abort_event=self._abort_event,
                     on_stage=lambda text, item=item: self._set_item_stage_note(item, text),
+                    create_fast_pdf=self._run_create_fast_pdf,
                 )
             elif ext in (".hwp", ".hwpx"):
                 ok, reason, is_fault = print_hwp(

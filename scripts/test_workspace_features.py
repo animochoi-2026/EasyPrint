@@ -36,6 +36,22 @@ class WorkspaceTests(unittest.TestCase):
             p.stop()
         self.work.cleanup()
 
+    def test_pdf_creation_checkbox_is_saved_and_passed_to_print_worker(self):
+        panel = self.app.control_panel
+        self.assertFalse(panel.create_fast_pdf_var.get())
+        panel.create_fast_pdf_check.invoke()
+        self.assertIs(self.app._settings['create_fast_pdf'], True)
+        item = PrintItem('exam.pdf', page_count=4)
+        self.app.items = [item]
+        self.app._rerender()
+        with patch('src.app.threading.Thread'), patch('src.app.check_file_ready', return_value=(True, None)), \
+             patch('src.app.print_pdf', return_value=(True, None, False)) as print_pdf:
+            self.app._on_start_clicked()
+            self.assertTrue(panel.create_fast_pdf_check.instate(['disabled']))
+            self.app._print_one(item)
+            self.assertIs(print_pdf.call_args.kwargs['create_fast_pdf'], True)
+            self.app.update()
+
     def test_incremental_rows_and_scroll_clamp(self):
         self.app.deiconify()
         for n in range(40):

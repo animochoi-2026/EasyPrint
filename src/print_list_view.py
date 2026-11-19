@@ -243,7 +243,7 @@ class PrintRow(ttk.Frame):
         raw = self.range_var.get()
 
         page_count = self.item.page_count
-        if self.item.extension == ".pdf" and page_count is None:
+        if raw.strip() and self.item.extension == ".pdf" and page_count is None:
             page_count = get_pdf_page_count(self.item.file_path)
             self.item.page_count = page_count
             self._update_page_count_caption()

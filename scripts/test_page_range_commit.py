@@ -66,6 +66,12 @@ class PageRangeCommitTests(unittest.TestCase):
             self.assertEqual(args[args.index('-print-settings') + 1], '2-3,5,2x')
             self.assertEqual(args[-1], 'local_fast.pdf')
 
+    def test_whole_document_can_start_before_page_count_is_known(self):
+        self.item.page_count = None
+        with patch('src.print_list_view.get_pdf_page_count') as count:
+            self.assertTrue(self.start())
+            count.assert_not_called()
+
     def test_invalid_ranges_block_worker(self):
         for raw in ('2~3', '11', '4-2', '1,,3'):
             with self.subTest(raw=raw), patch('src.print_list_view.messagebox.showwarning') as warning:

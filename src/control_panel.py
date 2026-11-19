@@ -15,8 +15,16 @@ class ControlPanel(ttk.Frame):
         self.printer_var = tk.StringVar()
         self.printer_combo = ttk.Combobox(self, textvariable=self.printer_var, state="readonly", width=27)
         self.printer_combo.grid(row=2, column=0, sticky="ew", pady=(5, 6))
-        self.printer_options_btn = ttk.Button(self, text="프린터 속성 / 용지 설정")
-        self.printer_options_btn.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        options = ttk.Frame(self, style="Sidebar.TFrame")
+        options.grid(row=3, column=0, sticky="ew", pady=(0, 6))
+        self.printer_options_btn = ttk.Button(options, text="프린터 속성 / 용지 설정")
+        self.printer_options_btn.pack(fill="x")
+        self.create_fast_pdf_var = tk.BooleanVar(master=self, value=False)
+        self.create_fast_pdf_check = ttk.Checkbutton(
+            options, text="복잡한 PDF의 빠른인쇄용 파일 생성",
+            variable=self.create_fast_pdf_var, style="Sidebar.TCheckbutton",
+        )
+        self.create_fast_pdf_check.pack(anchor="w", pady=(4, 0))
         self.start_btn = ttk.Button(self, text="대기 파일 인쇄", style="Primary.TButton")
         self.start_btn.grid(row=4, column=0, sticky="ew", pady=(0, 6))
         actions = ttk.Frame(self)
@@ -101,6 +109,7 @@ class ControlPanel(ttk.Frame):
         self.abort_btn.state(["!disabled" if printing else "disabled"])
         self.printer_combo.configure(state="disabled" if printing else "readonly")
         self.printer_options_btn.state(["disabled" if printing else "!disabled"])
+        self.create_fast_pdf_check.state(["disabled" if printing else "!disabled"])
         self._refresh_schedule_lock()
 
     def set_schedule_active(self, active, label_text=""):

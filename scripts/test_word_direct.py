@@ -195,7 +195,7 @@ class WordBatchTests(unittest.TestCase):
         items = [PrintItem(path) for path in paths]
         worker = SimpleNamespace(
             items=items, _lock=threading.Lock(), _run_ids={i.id for i in items},
-            _run_printer='Chosen printer', _stop_requested=False,
+            _run_printer='Chosen printer', _run_create_fast_pdf=False, _stop_requested=False,
             _abort_event=threading.Event(), _rerender=Mock(),
             _refresh_item_and_counts=Mock(), _set_item_stage_note=Mock(),
             _on_worker_finished=Mock(), _show_printer_fault_dialog=Mock(),
